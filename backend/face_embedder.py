@@ -274,7 +274,8 @@ class FaceEmbedder:
         out = self._sess.run(None, {self._input_name: inp})  # type: ignore[arg-type]
         # 归一化 embedding
         emb = np.asarray(out[0], dtype=np.float32).reshape(-1)
-        # 对 embedding 进行 L2 归一化
+        # 对 embedding 进行 L2 归一化？L2 归一化是什么？
+        # L2 归一化是将向量除以其 L2 范数，使得向量模长为 1，从而避免不同向量之间模长的影响
         emb = self._l2_normalize(emb)
         # 返回 embedding 结果
         return EmbedResult(
