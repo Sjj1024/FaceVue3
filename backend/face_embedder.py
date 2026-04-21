@@ -255,10 +255,15 @@ class FaceEmbedder:
     # 对一张图里的一个人脸计算 embedding
     def embed_one(self, image: Image.Image) -> EmbedResult:
         self._ensure_session()
+        # 转换图片为 RGB
         rgb = self._pil_to_rgb(image)
         # 检测人脸
+        # 返回人脸的左上角和右下角坐标以及置信度
+        # 置信度 是什么？
+        # 置信度是模型对人脸的置信度，值越大越可信
         x1, y1, x2, y2, score = self._detect_face_bbox(rgb)
         # 裁剪人脸
+        # 返回人脸的图像
         face = rgb[max(0, y1) : max(0, y2), max(0, x1) : max(0, x2)]
         # 如果人脸裁剪失败，则抛出异常
         if face.size == 0:

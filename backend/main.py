@@ -74,20 +74,25 @@ async def enroll(
     if not name.strip():
         raise HTTPException(status_code=400, detail="name 不能为空（例如：张三）。")
     pid = person_id.strip() if person_id and person_id.strip() else str(uuid.uuid4())
-
+    # 读取图片内容
     content = await image.read()
     if not content:
         raise HTTPException(status_code=400, detail="图片为空。")
-
+    
     try:
+        # 打开图片
         pil_img = Image.open(BytesIO(content))
+        # 加载图片
         pil_img.load()
+        # 转换图片方向
         pil_img = ImageOps.exif_transpose(pil_img)
     except Exception as e:
         raise HTTPException(status_code=400, detail=f"无法解析图片：{e}")
 
     try:
+        # 计算 embedding
         result = embedder.embed_one(pil_img)
+        # 保存 embedding
         rec = store.enroll(
             person_id=pid,
             name=name.strip(),
