@@ -20,12 +20,19 @@ const lastPhotoFilename = ref('capture.jpg')
 // 最近一次拍照的预览 URL
 const uploadPreviewUrl = ref('')
 
+// 摄像头实例
 const camRef = ref<InstanceType<typeof CameraCapture> | null>(null)
+// 是否开启实时识别
 const liveOn = ref(false)
+// 最近一次实时识别的名字
 const liveName = ref<string>('—')
+// 最近一次实时识别的距离
 const liveDistance = ref<number | null>(null)
+// 最近一次实时识别的匹配结果
 const liveMatched = ref<boolean | null>(null)
+// 最近一次实时识别的信息
 const liveInfo = ref<string>('')
+// 最近一次实时识别的人脸
 const liveFaces = ref<
     {
         bbox_xyxy: [number, number, number, number]
