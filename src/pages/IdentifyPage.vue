@@ -112,6 +112,7 @@ async function identifyOnceFromCamera() {
         const form = new FormData()
         form.append('threshold', String(threshold.value))
         form.append('top_k', String(topK.value))
+        // 最多人脸
         form.append('max_faces', '5')
         form.append('image', blob, 'frame.jpg')
 

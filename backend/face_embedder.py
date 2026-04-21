@@ -252,20 +252,26 @@ class FaceEmbedder:
             return v
         return (v / n).astype(np.float32)
 
+    # 对一张图里的一个人脸计算 embedding
     def embed_one(self, image: Image.Image) -> EmbedResult:
         self._ensure_session()
         rgb = self._pil_to_rgb(image)
-
+        # 检测人脸
         x1, y1, x2, y2, score = self._detect_face_bbox(rgb)
+        # 裁剪人脸
         face = rgb[max(0, y1) : max(0, y2), max(0, x1) : max(0, x2)]
+        # 如果人脸裁剪失败，则抛出异常
         if face.size == 0:
             raise ValueError("人脸裁剪失败（bbox 越界）。")
-
+        # 预处理人脸
         inp = self._preprocess_face(face)
+        # 运行模型
         out = self._sess.run(None, {self._input_name: inp})  # type: ignore[arg-type]
+        # 归一化 embedding
         emb = np.asarray(out[0], dtype=np.float32).reshape(-1)
+        # 对 embedding 进行 L2 归一化
         emb = self._l2_normalize(emb)
-
+        # 返回 embedding 结果
         return EmbedResult(
             embedding=emb,
             dim=int(emb.shape[0]),
