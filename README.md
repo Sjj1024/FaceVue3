@@ -1,56 +1,58 @@
-## facevue3（人脸录入 / 识别 Demo）
+## facevue3 (Face Enroll / Identify Demo)
 
-一个前后端分离的本地/内网 Demo：
+[English](README.md) | [中文](README_ZH.md)
 
--   **录入（Enroll）**：上传/拍照 → 后端提取人脸特征（embedding）→ 写入 SQLite
--   **识别（Identify / 实时识别）**：上传/摄像头帧 → 提取 embedding → 与库中 embedding 做相似度检索 → 返回最像的人
+A simple local / intranet demo with a separated frontend and backend:
+
+-   **Enroll**: upload/capture a photo → backend extracts face embedding → stored in SQLite
+-   **Identify (incl. real-time)**: upload/camera frame → extract embedding → similarity search in DB → return the closest person
 
 ---
 
-## 技术原理（当前实现）
+## How it works (current implementation)
 
-后端主要链路：
+Backend pipeline:
 
--   **人脸检测**：InsightFace（SCRFD）检测人脸框，并输出 **5 点关键点**
--   **对齐**：使用 5 点关键点将人脸对齐到 ArcFace 标准输入（112×112）
--   **特征提取**：ArcFace ONNX（onnxruntime）输出 **512 维 embedding**，并做 **L2 归一化**
--   **相似度**：余弦距离
+-   **Face detection**: InsightFace (SCRFD) detects face bbox and returns **5-point landmarks**
+-   **Alignment**: align the face to ArcFace canonical input (112×112) using the 5 landmarks
+-   **Embedding**: ArcFace ONNX (onnxruntime) outputs a **512-d embedding** and we apply **L2 normalization**
+-   **Similarity**: cosine distance
     -   \(cos_sim = dot(a,b)\)
     -   \(cos_dist = 1 - cos_sim\)
--   **匹配判定**：当 `distance <= threshold` 判定为 `matched=true`，否则当作未匹配（未知）
+-   **Match decision**: `matched=true` when `distance <= threshold`, otherwise treated as unknown/unmatched
 
-数据存储：
+Storage:
 
--   SQLite：`backend/data/embeddings.db`
+-   SQLite: `backend/data/embeddings.db`
 
-模型文件：
+Models:
 
--   ArcFace ONNX：首次运行会自动下载到 `backend/models/arcface.onnx`
--   InsightFace 模型缓存：首次运行会下载到 `backend/models/insightface/`
-
----
-
-## 目录结构
-
--   `src/`：Vue3 前端
--   `backend/`：FastAPI 后端
-    -   `backend/main.py`：API 入口
-    -   `backend/face_embedder.py`：检测 + 对齐 + embedding
-    -   `backend/storage.py`：SQLite 存储
+-   ArcFace ONNX: downloaded on first run to `backend/models/arcface.onnx`
+-   InsightFace model cache: downloaded on first run to `backend/models/insightface/`
 
 ---
 
-## 环境要求
+## Project structure
 
--   Node.js（建议 18/20+）
+-   `src/`: Vue 3 frontend
+-   `backend/`: FastAPI backend
+    -   `backend/main.py`: API entry
+    -   `backend/face_embedder.py`: detection + alignment + embedding
+    -   `backend/storage.py`: SQLite storage
+
+---
+
+## Requirements
+
+-   Node.js (recommended 18/20+)
 -   pnpm
--   Python 3.10+（建议 3.11/3.12）
+-   Python 3.10+ (recommended 3.11/3.12)
 
 ---
 
-## 启动后端（FastAPI）
+## Start the backend (FastAPI)
 
-在项目根目录执行：
+From the repository root:
 
 ```bash
 cd backend
@@ -60,49 +62,49 @@ python -m pip install -r requirements.txt
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
-打开接口文档：
+API docs:
 
 -   `http://localhost:8000/docs`
 
-### 首次启动提示
+### First-run notes
 
--   第一次调用 `/enroll` / `/identify` 之类接口时，会触发 InsightFace 模型下载与初始化，**可能需要几十秒到几分钟**（网络慢时更久）。
--   模型与缓存被写入项目目录 `backend/models/` 下，避免写入用户目录造成权限问题。
+-   The first call to `/enroll` / `/identify` may trigger InsightFace model download + initialization and can take **tens of seconds to minutes** (depending on network).
+-   Model/cache files are written under `backend/models/` to avoid permission issues in user home directories.
 
 ---
 
-## 启动前端（Vue3 + Vite）
+## Start the frontend (Vue 3 + Vite)
 
-在项目根目录执行：
+From the repository root:
 
 ```bash
 pnpm install
 pnpm run dev
 ```
 
-前端默认通过 Vite 代理走 `/api` 转发到后端（见 `src/pages/IdentifyPage.vue` 中的 `API_BASE = '/api'` 约定）。
+The frontend uses Vite proxy and calls the backend via `/api` (see `API_BASE = '/api'` in `src/pages/IdentifyPage.vue`).
 
 ---
 
-## 使用流程（推荐）
+## Recommended workflow
 
--   **1) 先录入**：到“录入”页面给每个人多录几张（不同角度/光照/表情），样本越多越稳
--   **2) 再识别**：到“识别”页面上传图片或开启实时识别
--   **3) 调阈值**：
-    -   `threshold` 越小越严格：更不容易误认，但“未知”会变多
-    -   `threshold` 越大越宽松：更容易匹配，但误认风险更大
+-   **1) Enroll first**: enroll multiple samples per person (different angles/lighting/expressions) for better stability
+-   **2) Then identify**: upload a photo or enable real-time identify
+-   **3) Tune threshold**:
+    -   smaller `threshold` = stricter = fewer false positives, more unknowns
+    -   larger `threshold` = looser = fewer unknowns, higher false-positive risk
 
 ---
 
-## FAQ（常见问题）
+## FAQ
 
-### 1) 前端请求一直 pending，后端看到 500（尤其是 `/enroll`）
+### 1) The frontend request stays pending and the backend returns 500 (especially `/enroll`)
 
-常见原因是首次初始化 InsightFace 时写缓存目录无权限或下载/初始化很慢。
+Most commonly, this happens during InsightFace first-time initialization (model download / cache write permissions / slow initialization).
 
-本项目已将 InsightFace 模型/缓存目录固定到 `backend/models/insightface/`，仍建议你：
+This project pins InsightFace model/cache root to `backend/models/insightface/`. Still make sure you:
 
--   **确保用 venv 启动后端**（不要用系统 Python）：
+-   **Start the backend with the venv** (do not use system Python):
 
 ```bash
 cd backend
@@ -110,33 +112,33 @@ source .venv/bin/activate
 uvicorn main:app --reload --host 0.0.0.0 --port 8000
 ```
 
--   **首次初始化耐心等待**：第一次会下载模型并构建缓存，期间接口会慢
+-   **Wait for first-run initialization**: the first request may be slow while models are downloaded and caches are built
 
-如果仍然 500，请在后端控制台查看 Python Traceback（完整堆栈）来定位网络/依赖问题。
+If you still get 500, check the Python traceback in the backend logs to locate the exact cause (network/permission/dependency).
 
-### 2) 升级检测/对齐方案后，是否需要重新录入？
+### 2) After upgrading detection/alignment, do I need to re-enroll?
 
-**建议重新录入（清空旧 embedding 再重录）**。因为裁剪/对齐策略变化会导致 embedding 分布变化，新旧混用会让距离判断不稳定。
+**Yes, it is recommended to re-enroll (clear old embeddings and enroll again)**. Changing crop/alignment changes the embedding distribution; mixing old and new embeddings makes distance thresholds unstable.
 
-清空方式（任选其一）：
+Ways to clear:
 
--   删除数据库文件：`backend/data/embeddings.db`
--   或调用接口逐个删除：`DELETE /people/{person_id}`
+-   Delete the database file: `backend/data/embeddings.db`
+-   Or delete people one by one: `DELETE /people/{person_id}`
 
-### 3) `threshold` 是什么含义？
+### 3) What does `threshold` mean?
 
-后端用余弦距离 `distance = 1 - dot(a,b)` 判断相似度。
+The backend uses cosine distance `distance = 1 - dot(a,b)`.
 
--   `distance <= threshold` → 匹配（`matched=true`）
--   `distance > threshold` → 不匹配（`matched=false`）
+-   `distance <= threshold` → matched (`matched=true`)
+-   `distance > threshold` → not matched (`matched=false`)
 
 ---
 
-## 隐私/合规提醒
+## Privacy / compliance note
 
-人脸 embedding 属于生物识别信息。用于真实场景时，建议至少做到：
+Face embeddings are biometric data. For real use cases, you should implement at least:
 
--   权限控制与审计
--   加密存储与备份策略
--   可删除与数据生命周期管理
--   明确告知与授权（合规要求以当地法规为准）
+-   access control and audit logs
+-   encryption at rest and backup strategy
+-   deletion / lifecycle management
+-   user notice and consent (follow local regulations)
