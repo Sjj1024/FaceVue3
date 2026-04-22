@@ -31,3 +31,5 @@ __pycache__
 .idea
 
 arcface.onnx
+
+models

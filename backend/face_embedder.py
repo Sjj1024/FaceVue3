@@ -5,9 +5,11 @@ from pathlib import Path
 from typing import Optional
 from urllib.request import urlretrieve
 
+import os
 import numpy as np
 import onnxruntime as ort
 from PIL import Image
+from PIL import ImageOps
 
 
 @dataclass(frozen=True)
@@ -42,6 +44,9 @@ class FaceEmbedder:
         self._sess: Optional[ort.InferenceSession] = None
         self._input_name: Optional[str] = None
         self._input_shape: Optional[list[int | str | None]] = None
+        self._fa = None  # InsightFace FaceAnalysis（检测 + 5点关键点）
+        # InsightFace 默认写 ~/.insightface，在受限环境可能无权限；改到项目内可写目录
+        self._insight_root = Path(__file__).resolve().parent / "models" / "insightface"
 
     def _ensure_model(self):
         if self.model_path.exists():
@@ -63,9 +68,40 @@ class FaceEmbedder:
         # shape 可能是 [1, 3, 112, 112] 或 [1, 112, 112, 3]，也可能带 None/字符串
         self._input_shape = list(inp0.shape)
 
+    def _ensure_face_analyzer(self):
+        """
+        使用 InsightFace 的 SCRFD 检测（输出 bbox + 5 点关键点），用于更准确的裁剪/对齐。
+        """
+        if self._fa is not None:
+            return
+        # InsightFace / Matplotlib / fontconfig 会写用户目录缓存；在受限环境可能无权限，
+        # 统一改到项目内可写目录，避免初始化卡住或报 500。
+        os.environ.setdefault("INSIGHTFACE_HOME", str(self._insight_root))
+        os.environ.setdefault("MPLCONFIGDIR", str(self._insight_root / ".mplconfig"))
+        os.environ.setdefault("XDG_CACHE_HOME", str(self._insight_root / ".cache"))
+        os.environ.setdefault("ALBUMENTATIONS_DISABLE_VERSION_CHECK", "1")
+        try:
+            from insightface.app import FaceAnalysis
+        except Exception as e:  # pragma: no cover
+            raise RuntimeError(
+                "未安装 insightface，无法启用更准确的人脸检测/对齐。"
+                "请先 pip install -r backend/requirements.txt"
+            ) from e
+
+        self._insight_root.mkdir(parents=True, exist_ok=True)
+        fa = FaceAnalysis(
+            name="buffalo_l",
+            providers=["CPUExecutionProvider"],
+            root=str(self._insight_root),
+        )
+        # det_size 越大越准但更慢；这里取 640 兼顾准确性与速度
+        fa.prepare(ctx_id=0, det_size=(640, 640))
+        self._fa = fa
+
     @staticmethod
     def _pil_to_rgb(image: Image.Image) -> np.ndarray:
-        img = image.convert("RGB")
+        # 统一处理 EXIF 方向，避免旋转导致检测/裁剪偏差
+        img = ImageOps.exif_transpose(image).convert("RGB")
         rgb = np.asarray(img, dtype=np.uint8)
         return rgb
 
@@ -113,100 +149,29 @@ class FaceEmbedder:
     def _detect_face_bboxes(
         cls, rgb: np.ndarray, *, max_faces: int = 5
     ) -> list[tuple[int, int, int, int, float]]:
+        raise NotImplementedError("请使用实例方法 _detect_faces（需要 FaceAnalysis）。")
+
+    def _detect_faces(self, rgb: np.ndarray, *, max_faces: int = 5):
         """
-        返回多个人脸 bbox: (x1, y1, x2, y2, score)
-        Haar 不提供真实置信度，这里用 1.0 作为占位。
+        返回 InsightFace 检测到的人脸对象列表（包含 bbox、det_score、kps）。
         """
-        import cv2
-
-        gray = cv2.cvtColor(rgb, cv2.COLOR_RGB2GRAY)
-
-        cascade_paths = [
-            Path(cv2.data.haarcascades) / "haarcascade_frontalface_default.xml",
-            Path(cv2.data.haarcascades) / "haarcascade_frontalface_alt2.xml",
-            Path(cv2.data.haarcascades) / "haarcascade_profileface.xml",
-        ]
-
-        # 多组参数从“严格→宽松”重试，提高命中率
-        param_sets = [
-            (1.1, 5, (60, 60)),
-            (1.08, 4, (48, 48)),
-            (1.05, 3, (32, 32)),
-            (1.03, 3, (24, 24)),
-        ]
-
-        boxes: list[tuple[int, int, int, int]] = []
-        scores: list[float] = []
-
-        def add_box(x: int, y: int, w: int, h: int, score: float):
-            x1, y1, x2, y2 = int(x), int(y), int(x + w), int(y + h)
-            # score：用面积近似（越大越可信），再乘一个常数占位
-            area = max(1, int(w) * int(h))
-            boxes.append((x1, y1, x2, y2))
-            scores.append(float(score) * float(area))
-
-        for cpath in cascade_paths:
-            cascade = cv2.CascadeClassifier(str(cpath))
-            if cascade.empty():
-                continue
-
-            for scale_factor, min_neighbors, min_size in param_sets:
-                faces = cascade.detectMultiScale(
-                    gray,
-                    scaleFactor=scale_factor,
-                    minNeighbors=min_neighbors,
-                    flags=cv2.CASCADE_SCALE_IMAGE,
-                    minSize=min_size,
-                )
-                if faces is not None and len(faces) > 0:
-                    for (x, y, w, h) in faces:
-                        add_box(int(x), int(y), int(w), int(h), 1.0)
-
-                # profileface 对“镜像侧脸”也试一次
-                if "profileface" in cpath.name:
-                    flipped = cv2.flip(gray, 1)
-                    faces2 = cascade.detectMultiScale(
-                        flipped,
-                        scaleFactor=scale_factor,
-                        minNeighbors=min_neighbors,
-                        flags=cv2.CASCADE_SCALE_IMAGE,
-                        minSize=min_size,
-                    )
-                    if faces2 is not None and len(faces2) > 0:
-                        w_img = gray.shape[1]
-                        for (x, y, w, h) in faces2:
-                            # 翻转坐标映射回原图：x' = W - (x + w)
-                            x_unflip = int(w_img - (int(x) + int(w)))
-                            add_box(x_unflip, int(y), int(w), int(h), 1.0)
-
-        if len(boxes) == 0:
+        self._ensure_face_analyzer()
+        faces = self._fa.get(rgb)  # type: ignore[union-attr]
+        if not faces:
             raise ValueError(
-                "图片中未检测到人脸（Haar）。"
-                "建议：保证脸更大更清晰、正脸、减少遮挡；"
-                "如果是手机拍照请确保已做 EXIF 方向矫正（后端已处理）。"
+                "图片中未检测到人脸（SCRFD）。建议：保证脸更大更清晰、正脸、减少遮挡。"
             )
-
-        # Haar 会对同一张脸产出多个相近框（不同 cascade/参数），
-        # 这里把 NMS 阈值设置得更严格以减少重叠。
-        keep = cls._nms(boxes, scores, iou_thresh=0.2, top_k=max_faces)
-        out: list[tuple[int, int, int, int, float]] = []
-        # 保持输出按面积从大到小，视觉上更稳定
-        keep = sorted(
-            keep,
-            key=lambda i: (boxes[i][2] - boxes[i][0]) * (boxes[i][3] - boxes[i][1]),
+        # InsightFace 内部已做 NMS；这里按面积从大到小取前 max_faces，稳定且符合原 UI 预期
+        faces = sorted(
+            faces,
+            key=lambda f: float((f.bbox[2] - f.bbox[0]) * (f.bbox[3] - f.bbox[1])),
             reverse=True,
-        )
-        for i in keep:
-            x1, y1, x2, y2 = boxes[i]
-            out.append((x1, y1, x2, y2, 1.0))
-        return out
+        )[: max_faces]
+        return faces
 
     @classmethod
     def _detect_face_bbox(cls, rgb: np.ndarray) -> tuple[int, int, int, int, float]:
-        # 兼容旧逻辑：取最大的人脸
-        faces = cls._detect_face_bboxes(rgb, max_faces=10)
-        best = max(faces, key=lambda b: (b[2] - b[0]) * (b[3] - b[1]))
-        return best
+        raise NotImplementedError("请使用实例方法 embed_one（需要 kps 对齐）。")
 
     def _preprocess_face(self, rgb_face: np.ndarray) -> np.ndarray:
         """
@@ -245,6 +210,20 @@ class FaceEmbedder:
         return x_nchw
 
     @staticmethod
+    def _aligned_crop(rgb: np.ndarray, kps: np.ndarray) -> np.ndarray:
+        """
+        使用 5 点关键点把人脸对齐到 ArcFace 标准 112x112。
+        """
+        from insightface.utils import face_align
+
+        kps5 = np.asarray(kps, dtype=np.float32)
+        if kps5.shape != (5, 2):
+            raise ValueError("关键点格式不正确，无法对齐。")
+        aligned_bgr = face_align.norm_crop(rgb[..., ::-1], kps5)  # InsightFace 期望 BGR
+        aligned_rgb = aligned_bgr[..., ::-1].copy()
+        return aligned_rgb
+
+    @staticmethod
     def _l2_normalize(v: np.ndarray, eps: float = 1e-12) -> np.ndarray:
         v = v.astype(np.float32).reshape(-1)
         n = float(np.linalg.norm(v))
@@ -257,19 +236,15 @@ class FaceEmbedder:
         self._ensure_session()
         # 转换图片为 RGB
         rgb = self._pil_to_rgb(image)
-        # 检测人脸
-        # 返回人脸的左上角和右下角坐标以及置信度
-        # 置信度 是什么？
-        # 置信度是模型对人脸的置信度，值越大越可信
-        x1, y1, x2, y2, score = self._detect_face_bbox(rgb)
-        # 裁剪人脸
-        # 返回人脸的图像
-        face = rgb[max(0, y1) : max(0, y2), max(0, x1) : max(0, x2)]
-        # 如果人脸裁剪失败，则抛出异常
-        if face.size == 0:
-            raise ValueError("人脸裁剪失败（bbox 越界）。")
-        # 预处理人脸
-        inp = self._preprocess_face(face)
+        # 检测 + 5点对齐：比 Haar 裁剪稳定很多
+        f0 = self._detect_faces(rgb, max_faces=1)[0]
+        x1, y1, x2, y2 = [int(v) for v in f0.bbox.tolist()]
+        score = float(getattr(f0, "det_score", 1.0))
+        kps = getattr(f0, "kps", None)
+        if kps is None:
+            raise ValueError("检测器未返回关键点，无法进行对齐。")
+        aligned = self._aligned_crop(rgb, kps)
+        inp = self._preprocess_face(aligned)
         # 运行模型
         out = self._sess.run(None, {self._input_name: inp})  # type: ignore[arg-type]
         # 归一化 embedding
@@ -292,13 +267,16 @@ class FaceEmbedder:
         """
         self._ensure_session()
         rgb = self._pil_to_rgb(image)
-        faces = self._detect_face_bboxes(rgb, max_faces=max_faces)
+        faces = self._detect_faces(rgb, max_faces=max_faces)
         results: list[EmbedResult] = []
-        for (x1, y1, x2, y2, score) in faces:
-            crop = rgb[max(0, y1) : max(0, y2), max(0, x1) : max(0, x2)]
-            if crop.size == 0:
+        for f in faces:
+            x1, y1, x2, y2 = [float(v) for v in f.bbox.tolist()]
+            score = float(getattr(f, "det_score", 1.0))
+            kps = getattr(f, "kps", None)
+            if kps is None:
                 continue
-            inp = self._preprocess_face(crop)
+            aligned = self._aligned_crop(rgb, kps)
+            inp = self._preprocess_face(aligned)
             out = self._sess.run(None, {self._input_name: inp})  # type: ignore[arg-type]
             emb = np.asarray(out[0], dtype=np.float32).reshape(-1)
             emb = self._l2_normalize(emb)

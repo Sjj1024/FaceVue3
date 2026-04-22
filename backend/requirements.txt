@@ -5,3 +5,4 @@ numpy==2.0.2
 Pillow==12.2.0
 onnxruntime==1.19.2
 opencv-python-headless==4.10.0.84
+insightface==0.7.3
