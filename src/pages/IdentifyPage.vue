@@ -51,6 +51,15 @@ let liveTimer: number | null = null
 // 最近一次实时识别的飞行标志
 let liveInFlight = false
 
+function similarityPct(distance: number) {
+    const t = threshold.value
+    if (!Number.isFinite(distance) || !Number.isFinite(t) || t <= 0) return '—'
+    // distance 越小越像：用 threshold 做归一化，映射到 0%~100%
+    const p = 1 - distance / t
+    const clamped = Math.max(0, Math.min(1, p))
+    return `${(clamped * 100).toFixed(1)}%`
+}
+
 // 选择文件
 function onFilePicked(e: Event) {
     lastError.value = ''
@@ -335,6 +344,7 @@ onBeforeUnmount(stopLive)
                                     v-if="typeof f.best?.distance === 'number'"
                                 >
                                     ·d={{ f.best.distance.toFixed(3) }}
+                                    <!-- ={{ similarityPct(f.best.distance) }} -->
                                 </span>
                             </div>
                         </div>
