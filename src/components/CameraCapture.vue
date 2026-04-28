@@ -9,12 +9,15 @@ const props = defineProps<{
     autoStart?: boolean
 }>()
 
+// 定义事件
 const emit = defineEmits<{
     (e: 'captured', payload: { blob: Blob; dataUrl: string }): void
     (e: 'error', message: string): void
 }>()
 
+// 视频元素
 const videoEl = ref<HTMLVideoElement | null>(null)
+// 预览 URL
 const previewUrl = ref<string>('')
 const isRunning = ref(false)
 
@@ -25,12 +28,17 @@ const actualFacingMode = ref<FacingMode>('user')
 const cameras = ref<{ deviceId: string; label: string }[]>([])
 const selectedDeviceId = ref<string>('')
 
+// 流
 let stream: MediaStream | null = null
 
+// 是否可以开始
 const canStart = computed(() => !isRunning.value && !!videoEl.value)
+// 是否可以拍照
 const canCapture = computed(() => isRunning.value && !!videoEl.value)
+// 是否镜像
 const isMirrored = computed(() => actualFacingMode.value === 'user')
 
+// 停止流
 function stopStream() {
     if (stream) {
         stream.getTracks().forEach((t) => t.stop())
@@ -40,6 +48,7 @@ function stopStream() {
     isRunning.value = false
 }
 
+/** 刷新摄像头列表 */
 async function refreshCameraList() {
     const devices = await navigator.mediaDevices.enumerateDevices()
     const opts = devices
@@ -71,6 +80,7 @@ function buildConstraints(): MediaTrackConstraints | boolean {
     }
 }
 
+/** 开始流 */
 async function start() {
     previewUrl.value = ''
 
@@ -125,11 +135,13 @@ async function start() {
     }
 }
 
+/** 重启流 */
 async function restart() {
     if (!isRunning.value) return
     await start()
 }
 
+/** 抓取帧 */
 async function captureFrame(opts?: {
     updatePreview?: boolean
     quality?: number
@@ -175,6 +187,7 @@ async function captureFrame(opts?: {
     return { blob, dataUrl }
 }
 
+/** 拍照 */
 async function capture() {
     try {
         const { blob, dataUrl } = await captureFrame({
@@ -187,12 +200,15 @@ async function capture() {
     }
 }
 
+/** 清除预览 */
 function clearPreview() {
     previewUrl.value = ''
 }
 
+/** 监听设备 ID 和朝向变化，重启流 */
 watch([selectedDeviceId, facingMode], restart)
 
+/** 暴露方法 */
 defineExpose({
     /** 抓取当前视频帧（不一定更新预览） */
     captureFrame,
@@ -206,6 +222,7 @@ defineExpose({
     getFacingMode: () => actualFacingMode.value,
 })
 
+/** 组件挂载后，刷新摄像头列表，监听设备变化，自动启动 */
 onMounted(async () => {
     try {
         await refreshCameraList()
@@ -221,6 +238,7 @@ onMounted(async () => {
     }
 })
 
+/** 组件卸载前，移除设备变化监听，停止流 */
 onBeforeUnmount(() => {
     navigator.mediaDevices?.removeEventListener?.(
         'devicechange',
