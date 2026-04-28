@@ -27,7 +27,7 @@ const lastError = ref<string>('')
 // 阈值 threshold：越小越像
 const scoreThreshold = ref(0.5)
 // 最多人脸
-const maxFaces = ref(10)
+const maxFaces = ref(6)
 // 是否显示人脸特征点
 const showLandmarks = ref(true)
 // 是否在控制台输出人脸特征点
