@@ -21,11 +21,27 @@ const lastPhotoFilename = ref('capture.jpg')
 const uploadPreviewUrl = ref('')
 // 最近一次“拍照”得到的预览（dataUrl）。用于拍完后隐藏实时画面，仅展示静态图。
 const capturedPreviewUrl = ref('')
+// 成功提示（短暂显示）
+const successMsg = ref('')
+let successTimer: number | null = null
+
+function showSuccess(msg: string) {
+    successMsg.value = msg
+    if (successTimer != null) window.clearTimeout(successTimer)
+    successTimer = window.setTimeout(() => {
+        successMsg.value = ''
+        successTimer = null
+    }, 2600)
+    alert(msg)
+    // 刷新页面
+    window.location.reload()
+}
 
 // 选择文件
 function onFilePicked(e: Event) {
     lastError.value = ''
     lastResult.value = null
+    successMsg.value = ''
 
     const input = e.target as HTMLInputElement
     const file = input.files?.[0]
@@ -43,11 +59,15 @@ function clearUpload() {
     capturedPreviewUrl.value = ''
     lastPhotoBlob.value = null
     lastPhotoFilename.value = 'capture.jpg'
+    lastError.value = ''
+    lastResult.value = null
+    successMsg.value = ''
 }
 
 async function enroll() {
     lastError.value = ''
     lastResult.value = null
+    successMsg.value = ''
 
     if (!name.value.trim()) {
         lastError.value = '请先填写名字（例如：张三）。'
@@ -76,6 +96,7 @@ async function enroll() {
             return
         }
         lastResult.value = data
+        showSuccess(`录入成功：${name.value.trim()}`)
     } catch (e) {
         lastError.value = e instanceof Error ? e.message : String(e)
     }
@@ -134,9 +155,10 @@ async function enroll() {
 
             <CameraCapture
                 v-if="!capturedPreviewUrl"
-                :autoStart="true"
+                :autoStart="false"
                 @captured="
                     ({ blob, dataUrl }) => (
+                        (successMsg = ''),
                         (lastPhotoBlob = blob),
                         (lastPhotoFilename = 'capture.jpg'),
                         (uploadPreviewUrl = ''),
@@ -146,6 +168,7 @@ async function enroll() {
                 @error="(m) => (lastError = m)"
             />
 
+            <p v-if="successMsg" class="success">{{ successMsg }}</p>
             <p v-if="lastError" class="error">{{ lastError }}</p>
             <pre v-else-if="lastResult" class="pre">
                 {{ JSON.stringify(lastResult, null, 2) }}
@@ -229,6 +252,11 @@ input {
     margin: 0;
     font-size: 14px;
     color: color-mix(in oklab, #ff3b30 80%, var(--text));
+}
+.success {
+    margin: 0;
+    font-size: 14px;
+    color: color-mix(in oklab, #34c759 80%, var(--text));
 }
 .hint {
     margin: 0;
