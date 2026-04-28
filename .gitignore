@@ -33,3 +33,6 @@ __pycache__
 arcface.onnx
 
 models
+
+backend/data
+backend/models
