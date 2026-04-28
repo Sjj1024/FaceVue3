@@ -85,8 +85,9 @@ async function start() {
         emit('error', '当前浏览器不支持 getUserMedia（无法访问摄像头）。')
         return
     }
-
+    // 停止当前流
     stopStream()
+
     try {
         // 先触发权限弹窗（部分浏览器未授权时 enumerateDevices 不完整）
         stream = await navigator.mediaDevices.getUserMedia({
