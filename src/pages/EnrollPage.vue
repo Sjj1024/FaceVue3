@@ -134,6 +134,7 @@ async function enroll() {
 
             <CameraCapture
                 v-if="!capturedPreviewUrl"
+                :autoStart="true"
                 @captured="
                     ({ blob, dataUrl }) => (
                         (lastPhotoBlob = blob),

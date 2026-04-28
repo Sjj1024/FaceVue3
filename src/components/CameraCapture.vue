@@ -5,6 +5,8 @@ type FacingMode = 'user' | 'environment'
 
 const props = defineProps<{
     initialFacingMode?: FacingMode
+    /** 组件挂载后自动开启摄像头 */
+    autoStart?: boolean
 }>()
 
 const emit = defineEmits<{
@@ -206,6 +208,9 @@ onMounted(async () => {
             'devicechange',
             refreshCameraList
         )
+        if (props.autoStart && videoEl.value) {
+            await start()
+        }
     } catch {
         // ignore
     }
