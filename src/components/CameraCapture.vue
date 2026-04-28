@@ -52,6 +52,7 @@ async function refreshCameraList() {
         selectedDeviceId.value = opts[0].deviceId
 }
 
+/** 构建摄像头约束 */
 function buildConstraints(): MediaTrackConstraints | boolean {
     if (selectedDeviceId.value) {
         return {

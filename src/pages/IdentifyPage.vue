@@ -44,8 +44,11 @@ const liveFaces = ref<
         } | null
     }[]
 >([])
+// 最近一次实时识别的图片尺寸
 const liveImageSize = ref<{ width: number; height: number } | null>(null)
+// 最近一次实时识别的定时器
 let liveTimer: number | null = null
+// 最近一次实时识别的飞行标志
 let liveInFlight = false
 
 // 选择文件
@@ -112,6 +115,7 @@ async function identifyOnceFromCamera() {
     if (liveInFlight) return
     liveInFlight = true
     try {
+        // 不更新预览，因为要节省流量
         const { blob } = await camRef.value.captureFrame({
             updatePreview: false,
             quality: 0.75,
@@ -134,8 +138,9 @@ async function identifyOnceFromCamera() {
                 : `识别失败：HTTP ${resp.status}`
             return
         }
-
+        // 解析识别结果
         const faces = Array.isArray(data?.faces) ? data.faces : []
+        // 解析图片尺寸
         liveImageSize.value =
             typeof data?.image?.width === 'number' &&
             typeof data?.image?.height === 'number' &&
@@ -143,6 +148,7 @@ async function identifyOnceFromCamera() {
             data.image.height > 0
                 ? { width: data.image.width, height: data.image.height }
                 : null
+        // 解析人脸信息
         liveFaces.value = faces
             .map((f: any) => ({
                 bbox_xyxy: f?.bbox_xyxy as [number, number, number, number],
@@ -156,9 +162,13 @@ async function identifyOnceFromCamera() {
 
         // 兼容原来的单条显示：取第一张“有名字”的脸（未知不展示）
         const first = liveFaces.value.find((x) => Boolean(x?.best?.name))
+        // 设置实时识别结果
         liveMatched.value = first ? first.matched : null
+        // 设置实时识别名字
         liveName.value = first?.best?.name ?? '—'
+        // 设置实时识别距离
         liveDistance.value = first?.best?.distance ?? null
+        // 清空实时识别信息
         liveInfo.value = ''
     } catch (e) {
         liveInfo.value = e instanceof Error ? e.message : String(e)
@@ -324,7 +334,7 @@ onBeforeUnmount(stopLive)
                                     class="dist"
                                     v-if="typeof f.best?.distance === 'number'"
                                 >
-                                    · d={{ f.best.distance.toFixed(3) }}
+                                    ·d={{ f.best.distance.toFixed(3) }}
                                 </span>
                             </div>
                         </div>
