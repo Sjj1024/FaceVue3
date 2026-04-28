@@ -93,6 +93,7 @@ async function enroll() {
             lastError.value = data?.detail
                 ? String(data.detail)
                 : `请求失败：HTTP ${resp.status}`
+            alert(lastError.value)
             return
         }
         lastResult.value = data
