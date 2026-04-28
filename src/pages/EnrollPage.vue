@@ -7,7 +7,7 @@ const API_BASE = '/api'
 
 const name = ref('张三')
 // 可选
-const personId = ref('') // 可选
+const personId = ref('')
 // 最近一次错误信息
 const lastError = ref('')
 // 最近一次录入结果
