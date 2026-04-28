@@ -19,6 +19,8 @@ const lastPhotoFilename = ref('capture.jpg')
 
 // 最近一次拍照的预览 URL
 const uploadPreviewUrl = ref('')
+// 最近一次“拍照”得到的预览（dataUrl）。用于拍完后隐藏实时画面，仅展示静态图。
+const capturedPreviewUrl = ref('')
 
 // 选择文件
 function onFilePicked(e: Event) {
@@ -38,6 +40,7 @@ function onFilePicked(e: Event) {
 
 function clearUpload() {
     uploadPreviewUrl.value = ''
+    capturedPreviewUrl.value = ''
     lastPhotoBlob.value = null
     lastPhotoFilename.value = 'capture.jpg'
 }
@@ -125,12 +128,18 @@ async function enroll() {
                 <img :src="uploadPreviewUrl" alt="upload preview" />
             </div>
 
+            <div v-if="capturedPreviewUrl" class="uploadPreview">
+                <img :src="capturedPreviewUrl" alt="captured preview" />
+            </div>
+
             <CameraCapture
+                v-if="!capturedPreviewUrl"
                 @captured="
-                    ({ blob }) => (
+                    ({ blob, dataUrl }) => (
                         (lastPhotoBlob = blob),
                         (lastPhotoFilename = 'capture.jpg'),
-                        (uploadPreviewUrl = '')
+                        (uploadPreviewUrl = ''),
+                        (capturedPreviewUrl = dataUrl)
                     )
                 "
                 @error="(m) => (lastError = m)"
