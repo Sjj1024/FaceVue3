@@ -6,9 +6,9 @@ import CameraCapture from '../components/CameraCapture.vue'
 const API_BASE = '/api'
 
 // 阈值 threshold：越小越像
-const threshold = ref(0.8)
+const threshold = ref(0.5)
 // TopK：返回候选数量
-const topK = ref(3)
+const topK = ref(2)
 // 最近一次错误信息
 const lastError = ref('')
 // 最近一次识别结果
