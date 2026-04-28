@@ -99,13 +99,13 @@ async function enroll() {
                     <span>名字（必填）</span>
                     <input v-model="name" placeholder="例如：张三" />
                 </label>
-                <label class="field">
+                <!-- <label class="field">
                     <span>person_id（可选）</span>
                     <input
                         v-model="personId"
                         placeholder="不填则后端自动生成 UUID"
                     />
-                </label>
+                </label> -->
                 <label class="field">
                     <span>上传照片（可选）</span>
                     <input

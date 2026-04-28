@@ -18,7 +18,8 @@ const videoEl = ref<HTMLVideoElement | null>(null)
 const previewUrl = ref<string>('')
 const isRunning = ref(false)
 
-const facingMode = ref<FacingMode>(props.initialFacingMode ?? 'user')
+// 默认优先后置摄像头（environment）
+const facingMode = ref<FacingMode>(props.initialFacingMode ?? 'environment')
 // 实际摄像头朝向（以 track.getSettings() 为准）
 const actualFacingMode = ref<FacingMode>('user')
 const cameras = ref<{ deviceId: string; label: string }[]>([])
@@ -48,7 +49,9 @@ async function refreshCameraList() {
             label: d.label || `摄像头 ${idx + 1}`,
         }))
     cameras.value = opts
-    if (!selectedDeviceId.value && opts.length > 0)
+    // 有多个摄像头时不默认锁定某个 deviceId，交给 facingMode 决定（优先后置）。
+    // 只有在仅有 1 个摄像头时，才自动选中，避免“空选项”造成困惑。
+    if (!selectedDeviceId.value && opts.length === 1)
         selectedDeviceId.value = opts[0].deviceId
 }
 
