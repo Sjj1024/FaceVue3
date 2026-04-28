@@ -147,9 +147,9 @@ async function enroll() {
             />
 
             <p v-if="lastError" class="error">{{ lastError }}</p>
-            <pre v-else-if="lastResult" class="pre">{{
-                JSON.stringify(lastResult, null, 2)
-            }}</pre>
+            <pre v-else-if="lastResult" class="pre">
+                {{ JSON.stringify(lastResult, null, 2) }}
+            </pre>
             <p v-else class="hint">
                 提示：后端默认是 `http://127.0.0.1:8000`。
             </p>
