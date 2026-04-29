@@ -2,6 +2,19 @@
 import { onBeforeUnmount, ref } from 'vue'
 import CameraCapture from '../components/CameraCapture.vue'
 
+type LiveBest = {
+    name: string | null
+    phone?: string | null
+    person_id: string
+    distance: number
+}
+
+type SeenPerson = {
+    person_id: string
+    name: string
+    phone: string
+}
+
 // 开发环境走 Vite 代理，避免 CORS：/api -> VITE_BACKEND_BASE
 const API_BASE = '/api'
 
@@ -37,13 +50,12 @@ const liveFaces = ref<
     {
         bbox_xyxy: [number, number, number, number]
         matched: boolean
-        best: {
-            name: string | null
-            person_id: string
-            distance: number
-        } | null
+        best: LiveBest | null
     }[]
 >([])
+// 本次打开页面期间：实时识别匹配到的人员（按 person_id 去重；刷新页面会清空）
+const seenPeople = ref<SeenPerson[]>([])
+const seenPersonIds = new Set<string>()
 // 最近一次实时识别的图片尺寸
 const liveImageSize = ref<{ width: number; height: number } | null>(null)
 // 最近一次实时识别的定时器
@@ -162,12 +174,14 @@ async function identifyOnceFromCamera() {
             .map((f: any) => ({
                 bbox_xyxy: f?.bbox_xyxy as [number, number, number, number],
                 matched: Boolean(f?.matched),
-                best: f?.best ?? null,
+                best: (f?.best ?? null) as LiveBest | null,
             }))
             .filter(
                 (f: any) =>
                     Array.isArray(f.bbox_xyxy) && f.bbox_xyxy.length === 4
             )
+
+        recordMatchedPeople()
 
         // 兼容原来的单条显示：取第一张“有名字”的脸（未知不展示）
         const first = liveFaces.value.find((x) => Boolean(x?.best?.name))
@@ -183,6 +197,27 @@ async function identifyOnceFromCamera() {
         liveInfo.value = e instanceof Error ? e.message : String(e)
     } finally {
         liveInFlight = false
+    }
+}
+
+/** 将当前帧中「已匹配且有姓名」的人合并进会话列表（去重） */
+function recordMatchedPeople() {
+    for (const f of liveFaces.value) {
+        if (!f.matched || !f.best?.person_id) continue
+        const name = f.best.name?.trim()
+        if (!name) continue
+        const pid = f.best.person_id
+        if (seenPersonIds.has(pid)) continue
+        seenPersonIds.add(pid)
+        const ph = f.best.phone?.trim()
+        seenPeople.value = [
+            ...seenPeople.value,
+            {
+                person_id: pid,
+                name,
+                phone: ph || '—',
+            },
+        ]
     }
 }
 
@@ -303,6 +338,29 @@ onBeforeUnmount(stopLive)
                 <img :src="uploadPreviewUrl" alt="upload preview" />
             </div>
 
+            <div v-if="seenPeople.length" class="seenPanel">
+                <h2 class="seenTitle">本次已识别人员</h2>
+                <p class="seenHint">
+                    仅在当前页面会话内累计；刷新页面后清空。
+                </p>
+                <table class="seenTable">
+                    <thead>
+                        <tr>
+                            <th>姓名</th>
+                            <th>手机号</th>
+                            <th>person_id</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="r in seenPeople" :key="r.person_id">
+                            <td class="seenName">{{ r.name }}</td>
+                            <td>{{ r.phone }}</td>
+                            <td><code>{{ r.person_id }}</code></td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
+
             <CameraCapture
                 ref="camRef"
                 @captured="
@@ -363,6 +421,9 @@ onBeforeUnmount(stopLive)
                     <p class="kv">
                         <b>best</b>:
                         <code>{{ lastResult.best?.name ?? '未知' }}</code>
+                        <span v-if="lastResult.best?.phone" class="muted">
+                            ·手机 {{ lastResult.best.phone }}
+                        </span>
                         <span class="muted"
                             >（person_id={{
                                 lastResult.best?.person_id
@@ -439,6 +500,42 @@ input {
 .uploadPreview img {
     width: 100%;
     display: block;
+}
+.seenPanel {
+    border: 1px solid var(--border);
+    border-radius: 14px;
+    padding: 12px 14px;
+    background: color-mix(in oklab, var(--bg) 92%, var(--code-bg));
+}
+.seenTitle {
+    margin: 0 0 6px;
+    font-size: 16px;
+}
+.seenHint {
+    margin: 0 0 10px;
+    font-size: 12px;
+    color: var(--text);
+    opacity: 0.9;
+}
+.seenTable {
+    width: 100%;
+    border-collapse: collapse;
+    font-size: 13px;
+}
+.seenTable th,
+.seenTable td {
+    padding: 8px 10px;
+    border-bottom: 1px solid var(--border);
+    text-align: left;
+    vertical-align: top;
+}
+.seenTable th {
+    font-weight: 600;
+    opacity: 0.9;
+}
+.seenName {
+    font-weight: 600;
+    color: var(--text-h);
 }
 .liveInfo {
     position: absolute;

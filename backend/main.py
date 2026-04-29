@@ -191,12 +191,22 @@ async def identify(
     best = cand[0]
     matched = bool(best["distance"] <= threshold)
 
+    pid0 = best["person_id"]
     return {
         "matched": matched,
         "threshold": threshold,
-        "best": {**best, "name": store.get_person_name(best["person_id"])},
+        "best": {
+            **best,
+            "name": store.get_person_name(pid0),
+            "phone": store.get_person_phone(pid0),
+        },
         "candidates": [
-            {**c, "name": store.get_person_name(c["person_id"])} for c in cand
+            {
+                **c,
+                "name": store.get_person_name(c["person_id"]),
+                "phone": store.get_person_phone(c["person_id"]),
+            }
+            for c in cand
         ],
         "model": q.model,
         "dim": q.dim,
@@ -270,6 +280,7 @@ async def identify_multi(
                 {
                     "person_id": person_id,
                     "name": store.get_person_name(person_id),
+                    "phone": store.get_person_phone(person_id),
                     "distance": dist,
                     "embedding_id": emb_id,
                 }

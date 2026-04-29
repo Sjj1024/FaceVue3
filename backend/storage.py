@@ -175,6 +175,17 @@ class EmbeddingStore:
             ).fetchone()
             return str(row["name"]) if row else None
 
+    def get_person_phone(self, person_id: str) -> str | None:
+        with self._connect() as conn:
+            row = conn.execute(
+                "SELECT phone FROM people WHERE person_id = ?;",
+                (person_id,),
+            ).fetchone()
+            if not row or row["phone"] is None:
+                return None
+            s = str(row["phone"]).strip()
+            return s if s else None
+
     def list_people(self) -> list[PersonSummary]:
         sql = """
         SELECT
