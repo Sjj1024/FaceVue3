@@ -7,6 +7,7 @@ const API_BASE = '/api'
 type PersonItem = {
     person_id: string
     name: string
+    phone?: string | null
     embeddings: number
     last_embedding_at: string | null
     created_at: string
@@ -112,8 +113,8 @@ onMounted(refresh)
             <div>
                 <h1>已标注人员列表</h1>
                 <p class="sub">
-                    从后端 <code>/people</code> 拉取当前已录入的名字与 embedding
-                    统计。
+                    从后端 <code>/people</code> 拉取已录入的姓名、手机号与
+                    embedding 统计。
                 </p>
             </div>
             <div class="actions">
@@ -143,6 +144,7 @@ onMounted(refresh)
                 <thead>
                     <tr>
                         <th>姓名</th>
+                        <th>手机号</th>
                         <th>person_id</th>
                         <th class="num">embeddings</th>
                         <th>最近录入</th>
@@ -152,12 +154,13 @@ onMounted(refresh)
                 </thead>
                 <tbody>
                     <tr v-if="!loading && items.length === 0">
-                        <td colspan="6" class="empty">
+                        <td colspan="7" class="empty">
                             暂无数据。请先去“录入”页面添加人脸。
                         </td>
                     </tr>
                     <tr v-for="p in items" :key="p.person_id">
                         <td class="name">{{ p.name }}</td>
+                        <td>{{ p.phone?.trim() ? p.phone : '—' }}</td>
                         <td>
                             <code>{{ p.person_id }}</code>
                         </td>

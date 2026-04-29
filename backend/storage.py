@@ -16,6 +16,7 @@ class EnrollRecord:
     id: str
     person_id: str
     name: str | None
+    phone: str | None
     model: str
     dim: int
     created_at: str  # ISO8601 UTC
@@ -36,6 +37,7 @@ class StoredEmbedding:
 class PersonSummary:
     person_id: str
     name: str
+    phone: str | None
     embeddings: int
     last_embedding_at: str | None
     created_at: str
@@ -61,11 +63,13 @@ class EmbeddingStore:
                 CREATE TABLE IF NOT EXISTS people (
                   person_id TEXT PRIMARY KEY,
                   name TEXT NOT NULL,
+                  phone TEXT NOT NULL,
                   created_at TEXT NOT NULL,
                   updated_at TEXT NOT NULL
                 );
                 """
             )
+            self._ensure_column(conn, "people", "phone", "TEXT NOT NULL DEFAULT ''")
             conn.execute(
                 """
                 CREATE TABLE IF NOT EXISTS embeddings (
@@ -105,6 +109,7 @@ class EmbeddingStore:
         *,
         person_id: str,
         name: str | None,
+        phone: str,
         model: str,
         embedding: np.ndarray,
         det_score: float | None = None,
@@ -123,13 +128,14 @@ class EmbeddingStore:
             if name is not None and name.strip():
                 conn.execute(
                     """
-                    INSERT INTO people (person_id, name, created_at, updated_at)
-                    VALUES (?, ?, ?, ?)
+                    INSERT INTO people (person_id, name, phone, created_at, updated_at)
+                    VALUES (?, ?, ?, ?, ?)
                     ON CONFLICT(person_id) DO UPDATE SET
                       name = excluded.name,
+                      phone = excluded.phone,
                       updated_at = excluded.updated_at;
                     """,
-                    (person_id, name.strip(), now, now),
+                    (person_id, name.strip(), phone.strip(), now, now),
                 )
             conn.execute(
                 """
@@ -143,7 +149,15 @@ class EmbeddingStore:
                 (rid, person_id, model, dim, emb, det_score, x1, y1, x2, y2, now),
             )
 
-        return EnrollRecord(id=rid, person_id=person_id, name=name.strip() if name else None, model=model, dim=dim, created_at=now)
+        return EnrollRecord(
+            id=rid,
+            person_id=person_id,
+            name=name.strip() if name else None,
+            phone=phone.strip(),
+            model=model,
+            dim=dim,
+            created_at=now,
+        )
 
     def count_person(self, person_id: str) -> int:
         with self._connect() as conn:
@@ -166,6 +180,7 @@ class EmbeddingStore:
         SELECT
           p.person_id,
           p.name,
+          p.phone,
           p.created_at,
           p.updated_at,
           COUNT(e.id) AS embeddings,
@@ -183,6 +198,7 @@ class EmbeddingStore:
                     PersonSummary(
                         person_id=str(r["person_id"]),
                         name=str(r["name"]),
+                        phone=str(r["phone"]) if r["phone"] is not None else None,
                         embeddings=int(r["embeddings"] or 0),
                         last_embedding_at=str(r["last_embedding_at"]) if r["last_embedding_at"] is not None else None,
                         created_at=str(r["created_at"]),
@@ -190,6 +206,13 @@ class EmbeddingStore:
                     )
                 )
         return out
+
+    @staticmethod
+    def _ensure_column(conn: sqlite3.Connection, table_name: str, column_name: str, definition: str):
+        cols = conn.execute(f"PRAGMA table_info({table_name});").fetchall()
+        exists = any(str(c["name"]) == column_name for c in cols)
+        if not exists:
+            conn.execute(f"ALTER TABLE {table_name} ADD COLUMN {column_name} {definition};")
 
     def delete_person(self, person_id: str) -> dict:
         """

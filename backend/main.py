@@ -62,6 +62,7 @@ def delete_person(person_id: str):
 @app.post("/enroll")
 async def enroll(
     name: str = Form(...),
+    phone: str = Form(...),
     person_id: str | None = Form(None),
     image: UploadFile = File(...),
 ):
@@ -73,6 +74,8 @@ async def enroll(
     """
     if not name.strip():
         raise HTTPException(status_code=400, detail="name 不能为空（例如：张三）。")
+    if not phone.strip():
+        raise HTTPException(status_code=400, detail="phone 不能为空（例如：13800138000）。")
     pid = person_id.strip() if person_id and person_id.strip() else str(uuid.uuid4())
     # 读取图片内容
     content = await image.read()
@@ -96,6 +99,7 @@ async def enroll(
         rec = store.enroll(
             person_id=pid,
             name=name.strip(),
+            phone=phone.strip(),
             model=result.model,
             embedding=result.embedding,
             det_score=result.det_score,

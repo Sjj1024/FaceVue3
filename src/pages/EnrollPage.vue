@@ -6,6 +6,7 @@ import CameraCapture from '../components/CameraCapture.vue'
 const API_BASE = '/api'
 
 const name = ref('张三')
+const phone = ref('')
 // 可选
 const personId = ref('')
 // 最近一次错误信息
@@ -73,6 +74,10 @@ async function enroll() {
         lastError.value = '请先填写名字（例如：张三）。'
         return
     }
+    if (!phone.value.trim()) {
+        lastError.value = '请先填写手机号。'
+        return
+    }
     if (!lastPhotoBlob.value) {
         lastError.value = '请先拍照或上传照片。'
         return
@@ -80,6 +85,7 @@ async function enroll() {
 
     const form = new FormData()
     form.append('name', name.value.trim())
+    form.append('phone', phone.value.trim())
     if (personId.value.trim()) form.append('person_id', personId.value.trim())
     form.append('image', lastPhotoBlob.value, lastPhotoFilename.value)
 
@@ -110,7 +116,7 @@ async function enroll() {
             <div>
                 <h1>录入（拍照 + 标记是谁）</h1>
                 <p class="sub">
-                    拍一张照片，填写名字，调用后端计算 embedding 并保存。
+                    拍一张照片，填写名字和手机号，调用后端计算 embedding 并保存。
                 </p>
             </div>
         </header>
@@ -120,6 +126,10 @@ async function enroll() {
                 <label class="field">
                     <span>名字（必填）</span>
                     <input v-model="name" placeholder="例如：张三" />
+                </label>
+                <label class="field">
+                    <span>手机号（必填）</span>
+                    <input v-model="phone" placeholder="例如：13800138000" />
                 </label>
                 <!-- <label class="field">
                     <span>person_id（可选）</span>
