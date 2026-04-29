@@ -338,29 +338,6 @@ onBeforeUnmount(stopLive)
                 <img :src="uploadPreviewUrl" alt="upload preview" />
             </div>
 
-            <div v-if="seenPeople.length" class="seenPanel">
-                <h2 class="seenTitle">本次已识别人员</h2>
-                <p class="seenHint">
-                    仅在当前页面会话内累计；刷新页面后清空。
-                </p>
-                <table class="seenTable">
-                    <thead>
-                        <tr>
-                            <th>姓名</th>
-                            <th>手机号</th>
-                            <th>person_id</th>
-                        </tr>
-                    </thead>
-                    <tbody>
-                        <tr v-for="r in seenPeople" :key="r.person_id">
-                            <td class="seenName">{{ r.name }}</td>
-                            <td>{{ r.phone }}</td>
-                            <td><code>{{ r.person_id }}</code></td>
-                        </tr>
-                    </tbody>
-                </table>
-            </div>
-
             <CameraCapture
                 ref="camRef"
                 @captured="
@@ -442,6 +419,29 @@ onBeforeUnmount(stopLive)
             <p v-else class="hint">
                 提示：先到“录入”页面给人脸建档，再来识别。
             </p>
+
+            <div v-if="seenPeople.length" class="seenPanel">
+                <h2 class="seenTitle">本次已识别人员</h2>
+                <p class="seenHint">仅在当前页面会话内累计；刷新页面后清空。</p>
+                <table class="seenTable">
+                    <thead>
+                        <tr>
+                            <th>姓名</th>
+                            <th>手机号</th>
+                            <th>person_id</th>
+                        </tr>
+                    </thead>
+                    <tbody>
+                        <tr v-for="r in seenPeople" :key="r.person_id">
+                            <td class="seenName">{{ r.name }}</td>
+                            <td>{{ r.phone }}</td>
+                            <td>
+                                <code>{{ r.person_id }}</code>
+                            </td>
+                        </tr>
+                    </tbody>
+                </table>
+            </div>
         </div>
     </section>
 </template>
