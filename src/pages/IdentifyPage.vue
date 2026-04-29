@@ -18,6 +18,16 @@ type SeenPerson = {
 // 开发环境走 Vite 代理，避免 CORS：/api -> VITE_BACKEND_BASE
 const API_BASE = '/api'
 
+/** 开发：走 Vite `/team-api` 代理；生产：使用 `VITE_TEAM_API_BASE` */
+function getTeamMobileAddUserUrl(): string {
+    if (import.meta.env.DEV) {
+        return '/team-api/v1/server/mobile_adduser'
+    }
+    const raw = import.meta.env.VITE_TEAM_API_BASE?.trim()
+    if (!raw) return ''
+    return `${raw.replace(/\/+$/, '')}/v1/server/mobile_adduser`
+}
+
 // 阈值 threshold：越小越像
 const threshold = ref(0.5)
 // TopK：返回候选数量
@@ -56,6 +66,9 @@ const liveFaces = ref<
 // 本次打开页面期间：实时识别匹配到的人员（按 person_id 去重；刷新页面会清空）
 const seenPeople = ref<SeenPerson[]>([])
 const seenPersonIds = new Set<string>()
+
+type JoinRowState = { status: 'idle' | 'loading' | 'ok' | 'err'; hint?: string }
+const joinTeamUi = ref<Record<string, JoinRowState>>({})
 // 最近一次实时识别的图片尺寸
 const liveImageSize = ref<{ width: number; height: number } | null>(null)
 // 最近一次实时识别的定时器
@@ -218,6 +231,62 @@ function recordMatchedPeople() {
                 phone: ph || '—',
             },
         ]
+    }
+}
+
+async function joinTeam(row: SeenPerson) {
+    const url = getTeamMobileAddUserUrl()
+    if (!url) {
+        window.alert(
+            '生产环境请在构建前配置环境变量 VITE_TEAM_API_BASE（队伍服务根地址，如 http://192.168.31.212:9080）。'
+        )
+        return
+    }
+    const mobile = row.phone.replace(/\s+/g, '').trim()
+    if (!mobile || mobile === '—') {
+        window.alert('当前行没有有效手机号，无法加入队伍。')
+        return
+    }
+    const pid = row.person_id
+    joinTeamUi.value = { ...joinTeamUi.value, [pid]: { status: 'loading' } }
+    try {
+        const resp = await fetch(url, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            body: JSON.stringify({ mobile }),
+        })
+        const text = await resp.text()
+        let hint = text.trim()
+        try {
+            const j = JSON.parse(text) as unknown
+            if (j !== null && typeof j === 'object') {
+                hint = JSON.stringify(j)
+            }
+        } catch {
+            /* 非 JSON 则保留原文 */
+        }
+        if (!resp.ok) {
+            joinTeamUi.value = {
+                ...joinTeamUi.value,
+                [pid]: {
+                    status: 'err',
+                    hint: `HTTP ${resp.status} ${hint.slice(0, 240)}`,
+                },
+            }
+            return
+        }
+        joinTeamUi.value = {
+            ...joinTeamUi.value,
+            [pid]: { status: 'ok', hint: hint ? hint.slice(0, 200) : '已提交' },
+        }
+    } catch (e) {
+        joinTeamUi.value = {
+            ...joinTeamUi.value,
+            [pid]: {
+                status: 'err',
+                hint: e instanceof Error ? e.message : String(e),
+            },
+        }
     }
 }
 
@@ -422,13 +491,18 @@ onBeforeUnmount(stopLive)
 
             <div v-if="seenPeople.length" class="seenPanel">
                 <h2 class="seenTitle">本次已识别人员</h2>
-                <p class="seenHint">仅在当前页面会话内累计；刷新页面后清空。</p>
+                <p class="seenHint">
+                    仅在当前页面会话内累计；刷新页面后清空。队伍接口根地址由环境变量
+                    <code>VITE_TEAM_API_BASE</code> 配置（开发时通过 Vite 代理
+                    <code>/team-api</code> 转发）。
+                </p>
                 <table class="seenTable">
                     <thead>
                         <tr>
                             <th>姓名</th>
                             <th>手机号</th>
                             <th>person_id</th>
+                            <th class="seenOps">操作</th>
                         </tr>
                     </thead>
                     <tbody>
@@ -437,6 +511,44 @@ onBeforeUnmount(stopLive)
                             <td>{{ r.phone }}</td>
                             <td>
                                 <code>{{ r.person_id }}</code>
+                            </td>
+                            <td class="seenOps">
+                                <div class="joinRow">
+                                    <button
+                                        type="button"
+                                        class="btn btnSm"
+                                        :disabled="
+                                            joinTeamUi[r.person_id]?.status ===
+                                            'loading'
+                                        "
+                                        @click="joinTeam(r)"
+                                    >
+                                        {{
+                                            joinTeamUi[r.person_id]?.status ===
+                                            'loading'
+                                                ? '提交中…'
+                                                : '加入队伍'
+                                        }}
+                                    </button>
+                                    <span
+                                        v-if="
+                                            joinTeamUi[r.person_id]?.status ===
+                                            'ok'
+                                        "
+                                        class="teamOk"
+                                        :title="joinTeamUi[r.person_id]?.hint"
+                                        >已加入</span
+                                    >
+                                    <span
+                                        v-else-if="
+                                            joinTeamUi[r.person_id]?.status ===
+                                            'err'
+                                        "
+                                        class="teamErr"
+                                        :title="joinTeamUi[r.person_id]?.hint"
+                                        >失败</span
+                                    >
+                                </div>
                             </td>
                         </tr>
                     </tbody>
@@ -536,6 +648,30 @@ input {
 .seenName {
     font-weight: 600;
     color: var(--text-h);
+}
+.seenOps {
+    white-space: nowrap;
+    vertical-align: middle;
+}
+.joinRow {
+    display: flex;
+    flex-wrap: wrap;
+    align-items: center;
+    gap: 8px;
+}
+.btnSm {
+    height: 30px;
+    padding: 0 10px;
+    font-size: 12px;
+}
+.teamOk {
+    font-size: 12px;
+    color: color-mix(in oklab, #34c759 80%, var(--text-h));
+}
+.teamErr {
+    font-size: 12px;
+    color: color-mix(in oklab, #ff3b30 80%, var(--text-h));
+    cursor: help;
 }
 .liveInfo {
     position: absolute;
