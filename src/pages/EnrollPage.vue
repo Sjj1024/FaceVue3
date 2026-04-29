@@ -116,7 +116,8 @@ async function enroll() {
             <div>
                 <h1>录入（拍照 + 标记是谁）</h1>
                 <p class="sub">
-                    拍一张照片，填写名字和手机号，调用后端计算 embedding 并保存。
+                    拍一张照片，填写名字和手机号，调用后端计算 embedding
+                    并保存。
                 </p>
             </div>
         </header>
@@ -131,13 +132,13 @@ async function enroll() {
                     <span>手机号（必填）</span>
                     <input v-model="phone" placeholder="例如：13800138000" />
                 </label>
-                <!-- <label class="field">
+                <label class="field">
                     <span>person_id（可选）</span>
                     <input
                         v-model="personId"
                         placeholder="不填则后端自动生成 UUID"
                     />
-                </label> -->
+                </label>
                 <label class="field">
                     <span>上传照片（可选）</span>
                     <input
