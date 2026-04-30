@@ -158,14 +158,11 @@ async function captureFrame(opts?: {
     }
     // 创建一个画布，将摄像头画面绘制到画布上
     const canvas = document.createElement('canvas')
+    // 设置画布的宽度和高度
     canvas.width = w
     canvas.height = h
-    // 获取画布的上下文
-    const ctx = canvas.getContext('2d')
-    if (!ctx) {
-        throw new Error('无法创建画布上下文。')
-    }
-
+    // 获取画布的上下文，并设置为 2D 上下文
+    const ctx = canvas.getContext('2d')!
     // 和视频显示一致：镜像自拍更直观（只镜像 user）
     if (facingMode.value === 'user') {
         ctx.translate(w, 0)
