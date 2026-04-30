@@ -141,22 +141,26 @@ async function restart() {
     await start()
 }
 
-/** 抓取帧 */
+/** 抓取摄像头一帧图片 */
 async function captureFrame(opts?: {
     updatePreview?: boolean
     quality?: number
 }) {
+    // 获取视频元素
     const v = videoEl.value
     if (!v) throw new Error('video 未就绪')
+    // 获取视频元素的宽度和高度
     const w = v.videoWidth
     const h = v.videoHeight
+    // 如果宽度和高度为 0，则抛出错误
     if (!w || !h) {
         throw new Error('摄像头画面尚未就绪，请稍后再试。')
     }
-
+    // 创建一个画布，将摄像头画面绘制到画布上
     const canvas = document.createElement('canvas')
     canvas.width = w
     canvas.height = h
+    // 获取画布的上下文
     const ctx = canvas.getContext('2d')
     if (!ctx) {
         throw new Error('无法创建画布上下文。')
@@ -167,12 +171,17 @@ async function captureFrame(opts?: {
         ctx.translate(w, 0)
         ctx.scale(-1, 1)
     }
+    // 绘制摄像头画面到画布
     ctx.drawImage(v, 0, 0, w, h)
 
+    // 将画布转换为 dataUrl
     const quality = opts?.quality ?? 0.9
+    // 将画布转换为 dataUrl
     const dataUrl = canvas.toDataURL('image/jpeg', quality)
+    // 更新预览 URL
     if (opts?.updatePreview !== false) previewUrl.value = dataUrl
 
+    // 将画布转换为 Blob
     const blob: Blob = await new Promise((resolve, reject) => {
         canvas.toBlob(
             (b) => {
@@ -183,7 +192,7 @@ async function captureFrame(opts?: {
             quality
         )
     })
-
+    // 返回 Blob 和 dataUrl
     return { blob, dataUrl }
 }
 
